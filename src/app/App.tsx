@@ -3,6 +3,7 @@ import { Quest, Character, Difficulty, QuestCategory, DIFFICULTY_CONFIG, CLASS_O
 import { CharacterPanel } from "./components/CharacterPanel";
 import { QuestBoard } from "./components/QuestBoard";
 import { AddQuestModal } from "./components/AddQuestModal";
+import { QuickAddBalloon } from "./components/QuickAddBalloon";
 import { LevelUpModal } from "./components/LevelUpModal";
 import { api, ApiUser } from "./api";
 import { mapApiTaskToQuest, mapApiUserToCharacter } from "./components/types";
@@ -102,6 +103,31 @@ export default function App() {
   
   const [loggedInUserId, setLoggedInUserId] = useState<string | null>(() => localStorage.getItem('questlist_userId'));
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Electron PowerMonitor hook (if available) -> Notification
+    if (window.electronAPI) {
+      const unsub = window.electronAPI.onPowerResume(() => {
+        window.electronAPI.showNotification('QuestList', 'Herói! A jornada continua! O sistema retornou.');
+      });
+      return () => {
+         window.removeEventListener('online', handleOnline);
+         window.removeEventListener('offline', handleOffline);
+         unsub();
+      }
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const fetchUserData = useCallback(async (userId: string) => {
     try {
@@ -126,6 +152,11 @@ export default function App() {
   useEffect(() => {
     if (loggedInUserId) {
       fetchUserData(loggedInUserId);
+      if (window.electronAPI) {
+        return window.electronAPI.onRefreshQuests(() => {
+           fetchUserData(loggedInUserId);
+        });
+      }
     } else {
       setIsInitializing(false);
     }
@@ -229,10 +260,30 @@ export default function App() {
       // Append new quest
       const newQuest = mapApiTaskToQuest(apiTask);
       setQuests((prev) => [newQuest, ...prev]);
+
+      if (window.electronAPI) {
+         window.electronAPI.showNotification('Nova Missão!', `Você aceitou o desafio: ${data.title}`);
+      }
     } catch (err) {
       console.error("Erro ao criar missão", err);
     }
   }, [loggedInUserId]);
+
+  const isQuickAdd = new URLSearchParams(window.location.search).get('quickadd') === 'true';
+
+  if (isQuickAdd) {
+     return (
+       <div className="w-full h-screen bg-transparent font-sans">
+          <style>{`body, html, #root { background: transparent !important; }`}</style>
+          <QuickAddBalloon
+             onAdd={handleAddQuest} 
+             onClose={() => {
+                 if (window.electronAPI) window.electronAPI.closeQuickAdd();
+             }} 
+          />
+       </div>
+     );
+  }
 
   if (isInitializing) {
     return (
@@ -271,8 +322,14 @@ export default function App() {
       {/* Top decorative border */}
       <div className="fixed top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-600/40 to-transparent z-10" />
 
+      {isOffline && (
+        <div className="w-full bg-red-900/50 text-red-200 py-1.5 text-center text-xs border-b border-red-800/50 fixed top-0 z-[100]" style={{ fontFamily: "'Cinzel', serif" }}>
+          ⚠️ Conexão Perdida. Modo Offline Ativado. As alterações serão salvas localmente.
+        </div>
+      )}
+
       {/* Main layout */}
-      <div className="relative z-[1] flex flex-col lg:flex-row max-w-6xl mx-auto min-h-screen">
+      <div className={`relative z-[1] flex flex-col lg:flex-row max-w-6xl mx-auto min-h-screen ${isOffline ? 'pt-8' : ''}`}>
 
         {/* Left sidebar - Character Panel */}
         <div className="w-full lg:w-72 lg:min-h-screen lg:border-r border-yellow-900/20 p-5 lg:p-6 flex-shrink-0">

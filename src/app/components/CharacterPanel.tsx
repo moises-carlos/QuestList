@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Character, xpToNextLevel, CLASS_OPTIONS } from "./types";
+import { CameraProfile } from "./CameraProfile";
 
 interface CharacterPanelProps {
   character: Character;
@@ -50,6 +51,11 @@ export function CharacterPanel({ character, onUpdateName, onUpdateClass }: Chara
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(character.name);
   const [showClassSelect, setShowClassSelect] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+
+  // Perfil da foto localmente salva
+  const profilePicKey = `questlist_profile_${character.name}`;
+  const [profilePic, setProfilePic] = useState(() => localStorage.getItem(profilePicKey));
 
   const xpNeeded = xpToNextLevel(character.level);
   const xpPercent = Math.min((character.currentXP / xpNeeded) * 100, 100);
@@ -86,8 +92,19 @@ export function CharacterPanel({ character, onUpdateName, onUpdateClass }: Chara
               />
             ))}
           </div>
-          <div className="text-6xl select-none z-10" style={{ filter: "drop-shadow(0 0 12px rgba(251,191,36,0.4))" }}>
-            {CLASS_ICONS[character.class] || "⚔️"}
+          <div 
+             className="text-6xl select-none z-10 w-full h-full flex items-center justify-center cursor-pointer group" 
+             style={{ filter: "drop-shadow(0 0 12px rgba(251,191,36,0.4))" }}
+             onClick={() => setShowCamera(true)}
+             title="Trocar Foto de Perfil"
+          >
+            {profilePic ? (
+               <img src={profilePic} alt="Profile" className="w-full h-full object-cover rounded-lg group-hover:opacity-80 transition-opacity" />
+            ) : (
+               <div className="group-hover:scale-110 transition-transform">
+                 {CLASS_ICONS[character.class] || "⚔️"}
+               </div>
+            )}
           </div>
           {/* Level badge */}
           <div className="absolute top-2 right-2 flex items-center justify-center w-8 h-8 rounded-full bg-black/60 border border-yellow-500/50 text-yellow-400" style={{ fontFamily: "'Cinzel', serif", fontSize: "11px" }}>
@@ -206,6 +223,17 @@ export function CharacterPanel({ character, onUpdateName, onUpdateClass }: Chara
           ))}
         </div>
       </div>
+
+      {showCamera && (
+        <CameraProfile 
+           onClose={() => setShowCamera(false)} 
+           onPhotoTaken={(data) => {
+              setProfilePic(data);
+              localStorage.setItem(profilePicKey, data);
+              setShowCamera(false);
+           }} 
+        />
+      )}
     </div>
   );
 }

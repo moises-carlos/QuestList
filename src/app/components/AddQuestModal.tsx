@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Difficulty, QuestCategory, DIFFICULTY_CONFIG, CATEGORY_CONFIG } from "./types";
 
 interface AddQuestModalProps {
-  onAdd: (quest: { title: string; description: string; difficulty: Difficulty; category: QuestCategory }) => void;
+  onAdd: (quest: { title: string; description: string; difficulty: Difficulty; category: QuestCategory }) => Promise<void>;
   onClose: () => void;
 }
 
@@ -12,10 +12,46 @@ export function AddQuestModal({ onAdd, onClose }: AddQuestModalProps) {
   const [difficulty, setDifficulty] = useState<Difficulty>("easy");
   const [category, setCategory] = useState<QuestCategory>("side");
 
-  const handleSubmit = () => {
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        setAudioUrl(url);
+      };
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch(err) {
+      console.error(err);
+      alert('Não foi possível acessar o microfone.');
+    }
+  };
+
+  const stopRecording = () => {
+     if (mediaRecorder && isRecording) {
+         mediaRecorder.stop();
+         mediaRecorder.stream.getTracks().forEach(t => t.stop());
+         setIsRecording(false);
+     }
+  };
+
+  const handleSubmit = async () => {
     if (!title.trim()) return;
-    onAdd({ title: title.trim(), description: description.trim(), difficulty, category });
-    onClose();
+    try {
+      await onAdd({ title: title.trim(), description: description.trim(), difficulty, category });
+      onClose();
+    } catch(err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -80,9 +116,26 @@ export function AddQuestModal({ onAdd, onClose }: AddQuestModalProps) {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Detalhes da missão..."
               rows={2}
-              className="w-full px-3 py-2.5 rounded-lg bg-black/40 border border-yellow-800/30 text-yellow-100/80 placeholder-yellow-900/50 outline-none focus:border-yellow-600/50 transition-colors resize-none"
+              className="w-full px-3 py-2.5 rounded-lg bg-black/40 border border-yellow-800/30 text-yellow-100/80 placeholder-yellow-900/50 outline-none focus:border-yellow-600/50 transition-colors resize-none mb-2"
               style={{ fontFamily: "'EB Garamond', serif", fontSize: "14px", fontStyle: "italic" }}
             />
+            {audioUrl ? (
+               <div className="flex items-center gap-2 mt-2">
+                 <audio src={audioUrl} controls className="h-8 max-w-[200px]" />
+                 <button onClick={() => setAudioUrl(null)} className="text-red-400 text-xs hover:text-red-300">Remover Áudio</button>
+               </div>
+            ) : (
+               <button 
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={`mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded text-xs border transition-colors ${
+                     isRecording ? "bg-red-900/40 border-red-500/50 text-red-300" : "bg-black/30 border-yellow-900/30 text-yellow-500/70 hover:border-yellow-700/50 hover:bg-yellow-900/20"
+                  }`}
+                  style={{ fontFamily: "'EB Garamond', serif" }}
+               >
+                  <span>{isRecording ? "⏹" : "🎤"}</span>
+                  {isRecording ? "Parar Gravação" : "Adicionar Nota de Voz"}
+               </button>
+            )}
           </div>
 
           {/* Difficulty */}
